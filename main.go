@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
-	"github.com/valyala/fastjson"
+	//"github.com/valyala/fastjson"
 )
 
 type UserData struct {
@@ -21,56 +21,71 @@ type UserData struct {
 const tableName string = "user_data"
 
 func HandleRequest(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	ApiResponse := events.APIGatewayProxyResponse{}
 	// Switch for identifying the HTTP request
 	switch request.HTTPMethod {
 	case "GET":
-		// Obtain the QueryStringParameter
-		name := string(request.QueryStringParameters["name"])
-		if name != "" {
-			user := UserData{User_id: name}
-			err := user.dynamoGET()
-			if err != nil {
-
-				ApiResponse = events.APIGatewayProxyResponse{
-					StatusCode: 500,
-					Body:       fmt.Sprintf("Error: %s", err.Error()),
-				}
-			} else {
-				jsonString, _ := json.Marshal(user)
-				ApiResponse = events.APIGatewayProxyResponse{
-					StatusCode: 200,
-					Body:       string(jsonString),
-				}
-			}
-		} else {
-			ApiResponse = events.APIGatewayProxyResponse{
-				StatusCode: 500,
-				Body:       "Error: Query Parameter name missing",
-			}
-		}
-
-	case "POST":
-		//validates json and returns error if not working
-		err := fastjson.Validate(request.Body)
-
-		if err != nil {
-			body := "Error: Invalid JSON payload ||| " + fmt.Sprint(err) + " Body Obtained" + "||||" + request.Body
-			ApiResponse = events.APIGatewayProxyResponse{Body: body, StatusCode: 500}
-		} else {
-			ApiResponse = events.APIGatewayProxyResponse{Body: request.Body, StatusCode: 200}
-		}
-
+		return HandleGetRequest(request)
+	default:
+		return events.APIGatewayProxyResponse{
+			StatusCode: 400,
+			Body:       "Error: Query Parameter name missing",
+		}, nil
 	}
-	// Response
-	return ApiResponse, nil
 }
 
-func (user *UserData) dynamoGET() error {
-	sess := session.Must(session.NewSession())
+func HandleGetRequest(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
-	// Defer the closure of the session
-	//defer sess.Close()
+	// Obtain query string
+	name := request.QueryStringParameters["name"]
+	if name == "" {
+		return events.APIGatewayProxyResponse{
+			StatusCode: 400,
+			Body:       "Error: Query Parameter name missing",
+		}, nil
+	}
+
+	// Retrieve user data
+	userData, err := getUserData(name)
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			StatusCode: 500,
+			Body:       fmt.Sprintf("Error: %s", err.Error()),
+		}, nil
+	}
+
+	// Format response
+	jsonString, err := formatResponse(userData)
+	if err != nil {
+		return events.APIGatewayProxyResponse{
+			StatusCode: 500,
+			Body:       fmt.Sprintf("Error formatting response: %s", err.Error()),
+		}, nil
+	}
+
+	return events.APIGatewayProxyResponse{
+		StatusCode: 200,
+		Body:       jsonString,
+	}, nil
+}
+
+func getUserData(name string) (UserData, error) {
+	user := UserData{User_id: name}
+	err := user.dynamoGet()
+	return user, err
+}
+
+func formatResponse(userData UserData) (string, error) {
+	jsonString, err := json.Marshal(userData)
+	if err != nil {
+		return "", err
+	}
+	return string(jsonString), nil
+}
+
+func (user *UserData) dynamoGet() error {
+
+	// Start DynamoDB connection
+	sess := session.Must(session.NewSession())
 
 	// Create DynamoDB client
 	svc := dynamodb.New(sess)
@@ -97,6 +112,7 @@ func (user *UserData) dynamoGET() error {
 	}
 	return nil
 }
+
 func main() {
 	// Starts the handler for AWS Lambda
 	lambda.Start(HandleRequest)
