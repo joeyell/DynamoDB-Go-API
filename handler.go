@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -14,67 +13,57 @@ import (
 
 type databaseInfo struct {
 	User_id  string `json:"user_id"`
-	Eligible bool   `json:"eligible"`
+	Eligible string `json:"eligible"`
 	Count    int64  `json:"count"`
 }
 
 const tableName string = "user_data"
 
 func HandleUser(c *gin.Context) {
-	log.Println("Received a GET request to /user/:id")
 
+	// Create a new instance of databaseInfo
 	var info databaseInfo
 	info.User_id = c.Param("id")
 
-	relativePath := c.Request.URL.Path
-
-	info.dynamoStart(relativePath)
-
+	if err := info.dynamoStart("/user/"); err != nil {
+		// If there's an error, return an internal server error
+		c.JSON(500, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
 	c.JSON(200, gin.H{
 		"message": info.Eligible,
 	})
 }
 
 func HandleCount(c *gin.Context) {
-	// Log that a GET request to /count has been received
-	log.Println("Received a GET request to /count")
 
 	// Create a new instance of databaseInfo
 	var info databaseInfo
 
-	// Extract the relative path from the request URL
-	relativePath := c.Request.URL.Path
-
-	// Call the dynamoStart method of the databaseInfo instance
-	// to perform some action related to DynamoDB
-	if err := info.dynamoStart(relativePath); err != nil {
+	if err := info.dynamoStart("/count"); err != nil {
 		// If there's an error, return an internal server error
 		c.JSON(500, gin.H{
-			"error": "Internal Server Error",
+			"error": err.Error(),
 		})
 		return
 	}
 
-	// Return a JSON response with a message indicating whether
-	// the request is eligible or not
 	c.JSON(200, gin.H{
-		"message": info.Eligible,
+		"message": info.Count,
 	})
 }
 
 func (info *databaseInfo) dynamoStart(relativePath string) error {
 
-	// Check if the relativePath is "/count"
-	if relativePath != "/count" {
-		// If it's not "/count", return an error
-		return errors.New("invalid endpoint")
-	}
 	switch relativePath {
-	case "/user/:id":
+	case "/user/":
 		info.dynamoUser()
 	case "/count":
 		info.dynamoCount()
-
+	default:
+		return errors.New("invalid endpoint")
 	}
 	return nil
 }
@@ -125,18 +114,20 @@ func (info *databaseInfo) dynamoCount() error {
 		Select:    aws.String("COUNT"),
 	})
 
+	// Handle errors
+	if err != nil {
+		return fmt.Errorf("failed to call Scan: %s", err)
+	}
+
 	// Convert ScanOuput to int64
 	count := *result.Count
 
+	// Assign count to info.Count
 	info.Count = count
 
-	if err != nil {
-		return fmt.Errorf("failed to call GetItem: %s", err)
-	}
-
+	// Handle empty database
 	if count == 0 {
 		return fmt.Errorf("database contains no values: %s", err)
 	}
-
 	return nil
 }

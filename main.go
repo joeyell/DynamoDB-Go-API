@@ -18,6 +18,8 @@ func init() {
 	r := gin.Default()
 	r.GET("/user/:id", HandleUser)
 	r.GET("/count", HandleCount)
+
+	// Default home page
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"message": "Home page!",
