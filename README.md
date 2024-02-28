@@ -1,3 +1,3 @@
-# lambdaPlayground
+# awsPlayground
 
-Learning and getting use to AWS Lambda
+Learning and getting use to AWS
