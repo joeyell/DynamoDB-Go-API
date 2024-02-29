@@ -18,6 +18,7 @@ func init() {
 	r := gin.Default()
 	r.GET("/user/:id", HandleUser)
 	r.GET("/count", HandleCount)
+	r.POST("/", HandleInsert)
 
 	// Default home page
 	r.GET("/", func(c *gin.Context) {
@@ -35,4 +36,5 @@ func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 func main() {
 	// Starts the handler for AWS Lambda
 	lambda.Start(Handler)
+
 }

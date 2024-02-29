@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -17,6 +18,13 @@ type databaseInfo struct {
 	Count    int64  `json:"count"`
 }
 
+type databasePut struct {
+	User_id  string `json:"user_id"`
+	Eligible string `json:"eligible"`
+}
+
+type DatabasePutSlice []databasePut
+
 const tableName string = "user_data"
 
 func HandleUser(c *gin.Context) {
@@ -25,7 +33,7 @@ func HandleUser(c *gin.Context) {
 	var info databaseInfo
 	info.User_id = c.Param("id")
 
-	if err := info.dynamoStart("/user/"); err != nil {
+	if err := info.dynamoGet("/user/"); err != nil {
 		// If there's an error, return an internal server error
 		c.JSON(500, gin.H{
 			"error": err.Error(),
@@ -42,7 +50,7 @@ func HandleCount(c *gin.Context) {
 	// Create a new instance of databaseInfo
 	var info databaseInfo
 
-	if err := info.dynamoStart("/count"); err != nil {
+	if err := info.dynamoGet("/count"); err != nil {
 		// If there's an error, return an internal server error
 		c.JSON(500, gin.H{
 			"error": err.Error(),
@@ -55,7 +63,53 @@ func HandleCount(c *gin.Context) {
 	})
 }
 
-func (info *databaseInfo) dynamoStart(relativePath string) error {
+func HandleInsert(c *gin.Context) {
+	// Create a new instance of DatabasePutSlice
+	var infoSlice DatabasePutSlice
+
+	// Bind the JSON request body to the info variable
+	if err := c.BindJSON(&infoSlice); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse request body"})
+		return
+	}
+
+	// Call the dynamoPost method to insert the data into the database
+	if err := infoSlice.dynamoPost(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Respond with success message
+	c.JSON(http.StatusOK, gin.H{"message": "Data inserted successfully"})
+}
+
+func (infoSlice *DatabasePutSlice) dynamoPost() error {
+	// Start DynamoDb connection=
+	sess := session.Must(session.NewSession())
+
+	// Create DynamoDB client
+	svc := dynamodb.New(sess)
+
+	for _, info := range *infoSlice {
+
+		av, err := dynamodbattribute.MarshalMap(info)
+		if err != nil {
+			return fmt.Errorf("failed to marshal map: %v", err)
+		}
+		// Create new item
+		_, err = svc.PutItem(&dynamodb.PutItemInput{
+			TableName: aws.String(tableName),
+			Item:      av,
+		})
+
+		if err != nil {
+			return fmt.Errorf("failed to insert item: %v", av)
+		}
+	}
+	return nil
+}
+
+func (info *databaseInfo) dynamoGet(relativePath string) error {
 
 	switch relativePath {
 	case "/user/":
