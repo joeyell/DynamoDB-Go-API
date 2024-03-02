@@ -17,6 +17,7 @@ func init() {
 	log.Printf("Gin cold start")
 	r := gin.Default()
 	r.GET("/user/:id", HandleUser)
+	r.GET("/user", HandleAll)
 	r.GET("/count", HandleCount)
 	r.POST("/", HandleInsert)
 

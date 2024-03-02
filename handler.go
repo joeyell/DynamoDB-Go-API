@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -13,27 +12,36 @@ import (
 )
 
 type databaseInfo struct {
-	User_id  string `json:"user_id"`
-	Eligible string `json:"eligible"`
-	Count    int64  `json:"count"`
+	Count int64 `json:"count"`
 }
 
-type databasePut struct {
-	User_id  string `json:"user_id"`
-	Eligible string `json:"eligible"`
+type User struct {
+	User_id string   `json:"user_id"`
+	Data    UserData `json:"data"`
 }
 
-type DatabasePutSlice []databasePut
+type DynamoDBItem struct {
+	Attributes map[string]*dynamodb.AttributeValue `json:"attributes"`
+}
+
+type UserData struct {
+	EntryDate string `json:"entry_date"`
+	Food      string `json:"food"`
+}
+
+type DatabasePutSlice []User
+
+type DynamoDBItemSlice []DynamoDBItem
 
 const tableName string = "user_data"
 
 func HandleUser(c *gin.Context) {
 
 	// Create a new instance of databaseInfo
-	var info databaseInfo
+	var info User
 	info.User_id = c.Param("id")
 
-	if err := info.dynamoGet("/user/"); err != nil {
+	if err := info.dynamoUser(); err != nil {
 		// If there's an error, return an internal server error
 		c.JSON(500, gin.H{
 			"error": err.Error(),
@@ -41,7 +49,21 @@ func HandleUser(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{
-		"message": info.Eligible,
+		"message": info,
+	})
+}
+
+func HandleAll(c *gin.Context) {
+
+	var info DynamoDBItemSlice
+
+	if err := info.dynamoAll(); err != nil {
+		c.JSON(500, gin.H{
+			"error": err.Error(),
+		})
+	}
+	c.JSON(200, gin.H{
+		"message": info,
 	})
 }
 
@@ -50,7 +72,7 @@ func HandleCount(c *gin.Context) {
 	// Create a new instance of databaseInfo
 	var info databaseInfo
 
-	if err := info.dynamoGet("/count"); err != nil {
+	if err := info.dynamoCount(); err != nil {
 		// If there's an error, return an internal server error
 		c.JSON(500, gin.H{
 			"error": err.Error(),
@@ -109,20 +131,7 @@ func (infoSlice *DatabasePutSlice) dynamoPost() error {
 	return nil
 }
 
-func (info *databaseInfo) dynamoGet(relativePath string) error {
-
-	switch relativePath {
-	case "/user/":
-		info.dynamoUser()
-	case "/count":
-		info.dynamoCount()
-	default:
-		return errors.New("invalid endpoint")
-	}
-	return nil
-}
-
-func (info *databaseInfo) dynamoUser() error {
+func (info *User) dynamoUser() error {
 
 	// Start DynamoDB connection
 	sess := session.Must(session.NewSession())
@@ -140,17 +149,22 @@ func (info *databaseInfo) dynamoUser() error {
 		},
 	})
 
+	// Check for errors returned by GetItem
 	if err != nil {
 		return fmt.Errorf("failed to call GetItem: %s", err)
 	}
 
-	if len(result.Item) == 0 {
-		return fmt.Errorf("item not found for user_id: %s", info.User_id)
+	// Check if the item was found
+	if result.Item == nil {
+		return fmt.Errorf("no item found for user_id: %s", info.User_id)
 	}
+	// Check if "data" attribute exists in the retrieved item
+	dataAttr := result.Item["data"]
 
-	if err := dynamodbattribute.UnmarshalMap(result.Item, &info); err != nil {
-		return fmt.Errorf("failed to unmarshal Record: %s", err)
-	}
+	// Dereference the pointer to string if it's not nil
+	info.Data.Food = *dataAttr.M["food"].S
+	info.Data.EntryDate = *dataAttr.M["entry_date"].S
+
 	return nil
 }
 
@@ -183,5 +197,32 @@ func (info *databaseInfo) dynamoCount() error {
 	if count == 0 {
 		return fmt.Errorf("database contains no values: %s", err)
 	}
+	return nil
+}
+
+func (info *DynamoDBItemSlice) dynamoAll() error {
+
+	// Start DynamoDB connection
+	sess := session.Must(session.NewSession())
+
+	// Create DynamoDB client
+	svc := dynamodb.New(sess)
+
+	result, err := svc.Scan(&dynamodb.ScanInput{
+		TableName: aws.String(tableName),
+	})
+
+	if err != nil {
+		return fmt.Errorf("error retrieving all data: %s", err)
+	}
+	for _, item := range result.Items {
+		// Unmarshal the item into a DynamoDBItem struct
+		var dynamoDBItem DynamoDBItem
+		dynamodbattribute.UnmarshalMap(item, &dynamoDBItem.Attributes)
+
+		// Append the DynamoDBItem to the items slice
+		*info = append(*info, dynamoDBItem)
+	}
+
 	return nil
 }
