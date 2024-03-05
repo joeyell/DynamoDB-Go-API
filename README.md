@@ -7,6 +7,8 @@ This project is all about me diving into AWS Lambda and DynamoDB, learning as I 
 - Utilised the AWS SDK and GoLang's Gin web framework to manage various routes.
 - Implemented functionality to allow users to both POST and GET data from a DynamoDB table.
 
+<img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/go/go-original-wordmark.svg" height="64" width="64" />&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/amazonwebservices/amazonwebservices-plain-wordmark.svg" height="64" width="64" />
+
 ## Requirements
 - GoLang
 - AWS account with access to Lambda and DynamoDB
