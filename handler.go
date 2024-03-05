@@ -21,7 +21,8 @@ type User struct {
 }
 
 type DynamoDBItem struct {
-	Attributes map[string]*dynamodb.AttributeValue `json:"attributes"`
+	UserID     string                 `json:"user_id"`
+	Attributes map[string]interface{} `json:"data"`
 }
 
 type UserData struct {
@@ -41,7 +42,7 @@ func HandleUser(c *gin.Context) {
 	var info User
 	info.User_id = c.Param("id")
 
-	if err := info.dynamoUser(); err != nil {
+	if err := info.getUser(); err != nil {
 		// If there's an error, return an internal server error
 		c.JSON(500, gin.H{
 			"error": err.Error(),
@@ -57,7 +58,7 @@ func HandleAll(c *gin.Context) {
 
 	var info DynamoDBItemSlice
 
-	if err := info.dynamoAll(); err != nil {
+	if err := info.getAll(); err != nil {
 		c.JSON(500, gin.H{
 			"error": err.Error(),
 		})
@@ -72,7 +73,7 @@ func HandleCount(c *gin.Context) {
 	// Create a new instance of databaseInfo
 	var info databaseInfo
 
-	if err := info.dynamoCount(); err != nil {
+	if err := info.getCount(); err != nil {
 		// If there's an error, return an internal server error
 		c.JSON(500, gin.H{
 			"error": err.Error(),
@@ -131,7 +132,7 @@ func (infoSlice *DatabasePutSlice) dynamoPost() error {
 	return nil
 }
 
-func (info *User) dynamoUser() error {
+func (info *User) getUser() error {
 
 	// Start DynamoDB connection
 	sess := session.Must(session.NewSession())
@@ -168,7 +169,7 @@ func (info *User) dynamoUser() error {
 	return nil
 }
 
-func (info *databaseInfo) dynamoCount() error {
+func (info *databaseInfo) getCount() error {
 
 	// Start DynamoDB connection
 	sess := session.Must(session.NewSession())
@@ -200,7 +201,7 @@ func (info *databaseInfo) dynamoCount() error {
 	return nil
 }
 
-func (info *DynamoDBItemSlice) dynamoAll() error {
+func (info *DynamoDBItemSlice) getAll() error {
 
 	// Start DynamoDB connection
 	sess := session.Must(session.NewSession())
@@ -215,6 +216,7 @@ func (info *DynamoDBItemSlice) dynamoAll() error {
 	if err != nil {
 		return fmt.Errorf("error retrieving all data: %s", err)
 	}
+
 	for _, item := range result.Items {
 		// Unmarshal the item into a DynamoDBItem struct
 		var dynamoDBItem DynamoDBItem

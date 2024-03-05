@@ -13,6 +13,14 @@ import (
 var ginLambda *ginadapter.GinLambda
 
 func init() {
+	ginLambda = ginadapter.New(setupRouter())
+}
+
+func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	return ginLambda.ProxyWithContext(ctx, request)
+}
+
+func setupRouter() *gin.Engine {
 	// stdout and stderr are sent to AWS CloudWatch Logs
 	log.Printf("Gin cold start")
 	r := gin.Default()
@@ -27,15 +35,10 @@ func init() {
 			"message": "Home page!",
 		})
 	})
-	ginLambda = ginadapter.New(r)
-}
-
-func Handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	return ginLambda.ProxyWithContext(ctx, request)
+	return r
 }
 
 func main() {
 	// Starts the handler for AWS Lambda
 	lambda.Start(Handler)
-
 }
